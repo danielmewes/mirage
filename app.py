@@ -2,6 +2,8 @@ import os
 import json
 import re
 import uuid
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -15,6 +17,10 @@ app = FastAPI()
 
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# Thread pool for concurrent LLM calls
+# Using a reasonable pool size to allow multiple sessions to generate concurrently
+executor = ThreadPoolExecutor(max_workers=10)
 
 
 # Session management
@@ -61,9 +67,10 @@ def strip_markdown_code_blocks(text: str) -> str:
     return text.strip()
 
 
-def get_llm_response(session: SessionState, user_message: str) -> str:
+def _get_llm_response_sync(session: SessionState, user_message: str) -> str:
     """
-    Send a message to the LLM and get the HTML response.
+    Synchronous function to send a message to the LLM and get the HTML response.
+    This runs in a thread pool to avoid blocking the event loop.
     """
     # Add user message to history
     session.conversation_history.append({
@@ -95,6 +102,15 @@ def get_llm_response(session: SessionState, user_message: str) -> str:
     except Exception as e:
         print(f"Error calling Anthropic API: {e}")
         raise
+
+
+async def get_llm_response(session: SessionState, user_message: str) -> str:
+    """
+    Async wrapper to send a message to the LLM and get the HTML response.
+    Runs the synchronous API call in a thread pool for concurrent execution.
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _get_llm_response_sync, session, user_message)
 
 
 def create_initial_prompt(app_description: str) -> str:
@@ -185,9 +201,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 print(f"Session {session_id} - Initializing application: {session.application_description}")
 
-                # Generate initial HTML
+                # Generate initial HTML (runs in thread pool)
                 initial_prompt = create_initial_prompt(session.application_description)
-                html_response = get_llm_response(session, initial_prompt)
+                html_response = await get_llm_response(session, initial_prompt)
 
                 # Send HTML back to client
                 await websocket.send_json({
@@ -204,9 +220,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 if form_data:
                     print(f"Form data: {form_data}")
 
-                # Generate prompt for interaction
+                # Generate prompt for interaction (runs in thread pool)
                 interaction_prompt = create_interaction_prompt(element_id, form_data)
-                html_response = get_llm_response(session, interaction_prompt)
+                html_response = await get_llm_response(session, interaction_prompt)
 
                 # Check if the LLM indicated no change is needed
                 if html_response.strip() == "NO_CHANGE":
@@ -231,6 +247,13 @@ async def websocket_endpoint(websocket: WebSocket):
         if session_id in sessions:
             del sessions[session_id]
             print(f"Session {session_id} - Cleaned up session data")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on application shutdown."""
+    print("Shutting down thread pool executor...")
+    executor.shutdown(wait=True)
 
 
 if __name__ == "__main__":
