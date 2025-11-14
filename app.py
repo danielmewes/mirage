@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import uuid
 from typing import List, Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -15,9 +16,17 @@ app = FastAPI()
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# Store conversation history (single user session)
-conversation_history: List[Dict[str, str]] = []
-application_description: str = ""
+
+# Session management
+class SessionState:
+    """Stores state for a single user session."""
+    def __init__(self):
+        self.conversation_history: List[Dict[str, str]] = []
+        self.application_description: str = ""
+
+
+# Dictionary to store session states by session ID
+sessions: Dict[str, SessionState] = {}
 
 
 def strip_markdown_code_blocks(text: str) -> str:
@@ -52,12 +61,12 @@ def strip_markdown_code_blocks(text: str) -> str:
     return text.strip()
 
 
-def get_llm_response(user_message: str) -> str:
+def get_llm_response(session: SessionState, user_message: str) -> str:
     """
     Send a message to the LLM and get the HTML response.
     """
     # Add user message to history
-    conversation_history.append({
+    session.conversation_history.append({
         "role": "user",
         "content": user_message
     })
@@ -67,14 +76,14 @@ def get_llm_response(user_message: str) -> str:
         response = anthropic_client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=4096,
-            messages=conversation_history
+            messages=session.conversation_history
         )
 
         # Extract the assistant's response
         assistant_message = response.content[0].text
 
         # Add assistant response to history
-        conversation_history.append({
+        session.conversation_history.append({
             "role": "assistant",
             "content": assistant_message
         })
@@ -154,9 +163,14 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time communication with the frontend.
     """
-    global conversation_history, application_description
-
     await websocket.accept()
+
+    # Create a unique session ID for this WebSocket connection
+    session_id = str(uuid.uuid4())
+    session = SessionState()
+    sessions[session_id] = session
+
+    print(f"New session created: {session_id}")
 
     try:
         while True:
@@ -166,14 +180,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if message_type == "init":
                 # Initialize the application with user's description
-                application_description = data.get("description", "")
-                conversation_history = []  # Reset history
+                session.application_description = data.get("description", "")
+                session.conversation_history = []  # Reset history
 
-                print(f"Initializing application: {application_description}")
+                print(f"Session {session_id} - Initializing application: {session.application_description}")
 
                 # Generate initial HTML
-                initial_prompt = create_initial_prompt(application_description)
-                html_response = get_llm_response(initial_prompt)
+                initial_prompt = create_initial_prompt(session.application_description)
+                html_response = get_llm_response(session, initial_prompt)
 
                 # Send HTML back to client
                 await websocket.send_json({
@@ -186,13 +200,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 element_id = data.get("elementId", "")
                 form_data = data.get("formData", {})
 
-                print(f"User clicked element: {element_id}")
+                print(f"Session {session_id} - User clicked element: {element_id}")
                 if form_data:
                     print(f"Form data: {form_data}")
 
                 # Generate prompt for interaction
                 interaction_prompt = create_interaction_prompt(element_id, form_data)
-                html_response = get_llm_response(interaction_prompt)
+                html_response = get_llm_response(session, interaction_prompt)
 
                 # Check if the LLM indicated no change is needed
                 if html_response.strip() == "NO_CHANGE":
@@ -209,9 +223,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
 
     except WebSocketDisconnect:
-        print("Client disconnected")
+        print(f"Session {session_id} - Client disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"Session {session_id} - WebSocket error: {e}")
+    finally:
+        # Always clean up session data when connection closes
+        if session_id in sessions:
+            del sessions[session_id]
+            print(f"Session {session_id} - Cleaned up session data")
 
 
 if __name__ == "__main__":
