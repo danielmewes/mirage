@@ -194,17 +194,25 @@
             attachClickListeners();
         }
 
-        // Attach click listeners to elements with IDs
+        // Attach click listeners to elements marked as interactive
         function attachClickListeners() {
-            const elementsWithIds = document.querySelectorAll('[id]');
+            // Only select elements with data-interactive="true"
+            const interactiveElements = document.querySelectorAll('[data-interactive="true"]');
 
-            elementsWithIds.forEach(element => {
-                // Skip our own UI elements
+            console.log(`Found ${interactiveElements.length} interactive elements`);
+
+            interactiveElements.forEach(element => {
+                // Skip our own UI elements (shouldn't happen, but just in case)
                 if (element.id === 'setup-container' ||
                     element.id === 'app-container' ||
                     element.id === 'loading' ||
                     element.id === 'app-description' ||
                     element.id === 'start-button') {
+                    return;
+                }
+
+                if (!element.id) {
+                    console.warn('Interactive element found without ID:', element);
                     return;
                 }
 

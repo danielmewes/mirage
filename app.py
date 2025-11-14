@@ -98,7 +98,17 @@ This application is being rendered to a user in their browser. Your job is to ge
 
 Please generate standard HTML (no external dependencies, inline CSS is fine) to render the home screen of this application to the user.
 
-IMPORTANT: For any interactive elements (buttons, links, form submissions, etc.) that you want the user to be able to interact with, assign them a unique ID attribute. When the user clicks on an element with an ID, that interaction will be sent back to you so you can update the application state and generate a new view.
+IMPORTANT: For any interactive elements (buttons, links, form submissions, etc.) that you want to receive click events for:
+1. Assign them a unique ID attribute
+2. Add the attribute data-interactive="true" to mark them as interactive
+
+When the user clicks on an element with data-interactive="true", that interaction will be sent back to you so you can update the application state and generate a new view.
+
+Elements without data-interactive="true" will NOT trigger events, even if they have IDs. This allows you to have input fields, text areas, and other elements that don't need to trigger view updates on every click.
+
+Example:
+<button id="submit-button" data-interactive="true">Submit</button>  <!-- Will trigger events -->
+<input id="task-input" type="text" />  <!-- Will NOT trigger events (user can type freely) -->
 
 Please output ONLY the HTML code, without any markdown formatting or explanation."""
 
@@ -121,9 +131,10 @@ NO_CHANGE
 If the view DOES need to change, generate an updated HTML view to represent the new state of the application to the user.
 
 Remember to:
-1. Assign unique IDs to any interactive elements
-2. Output ONLY the HTML code (or NO_CHANGE), without any markdown formatting or explanation
-3. Use standard HTML with inline CSS if needed"""
+1. Assign unique IDs to interactive elements and mark them with data-interactive="true"
+2. Elements without data-interactive="true" will not trigger events (useful for input fields, etc.)
+3. Output ONLY the HTML code (or NO_CHANGE), without any markdown formatting or explanation
+4. Use standard HTML with inline CSS if needed"""
 
 
 @app.get("/")
