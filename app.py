@@ -5,6 +5,7 @@ import uuid
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from anthropic import Anthropic
@@ -13,14 +14,25 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-app = FastAPI()
-
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # Thread pool for concurrent LLM calls
 # Using a reasonable pool size to allow multiple sessions to generate concurrently
 executor = ThreadPoolExecutor(max_workers=10)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan events."""
+    # Startup: nothing special needed here, resources are already initialized
+    yield
+    # Shutdown: clean up resources
+    print("Shutting down thread pool executor...")
+    executor.shutdown(wait=True)
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # Session management
@@ -247,13 +259,6 @@ async def websocket_endpoint(websocket: WebSocket):
         if session_id in sessions:
             del sessions[session_id]
             print(f"Session {session_id} - Cleaned up session data")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up resources on application shutdown."""
-    print("Shutting down thread pool executor...")
-    executor.shutdown(wait=True)
 
 
 if __name__ == "__main__":
