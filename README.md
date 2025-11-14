@@ -1,4 +1,4 @@
-# LLM Application Simulator
+# Mirage
 
 An interactive web application that uses Claude AI to simulate any application you can imagine. The LLM generates HTML views on-the-fly based on user interactions.
 
@@ -27,7 +27,7 @@ http://localhost:8000
 
 ## How It Works
 
-1. When you first open the application, you'll be prompted to describe the type of application you want to simulate (e.g., "A todo list manager", "A calculator", "A simple game").
+1. When you first open the application, you'll be prompted to describe the type of application you want to use (e.g., "A todo list manager", "A calculator", "A simple game").
 
 2. The LLM will generate an initial HTML view for the home screen of that application.
 
