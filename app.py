@@ -98,17 +98,18 @@ This application is being rendered to a user in their browser. Your job is to ge
 
 Please generate standard HTML (no external dependencies, inline CSS is fine) to render the home screen of this application to the user.
 
-IMPORTANT: For any interactive elements (buttons, links, form submissions, etc.) that you want to receive click events for:
+IMPORTANT: For any interactive elements (buttons, links, form submissions, etc.) that you want to receive events for:
 1. Assign them a unique ID attribute
 2. Add the attribute data-interactive="true" to mark them as interactive
 
-When the user clicks on an element with data-interactive="true", that interaction will be sent back to you so you can update the application state and generate a new view.
+When the user clicks on an element with data-interactive="true", that interaction will be sent back to you. For input fields and textareas with data-interactive="true", pressing Enter will also trigger the event. This allows you to update the application state and generate a new view.
 
-Elements without data-interactive="true" will NOT trigger events, even if they have IDs. This allows you to have input fields, text areas, and other elements that don't need to trigger view updates on every click.
+Elements without data-interactive="true" will NOT trigger events, even if they have IDs. This allows you to have input fields, text areas, and other elements that don't need to trigger view updates.
 
 Example:
-<button id="submit-button" data-interactive="true">Submit</button>  <!-- Will trigger events -->
-<input id="task-input" type="text" />  <!-- Will NOT trigger events (user can type freely) -->
+<button id="submit-button" data-interactive="true">Submit</button>  <!-- Will trigger events on click -->
+<input id="task-input" data-interactive="true" type="text" />  <!-- Will trigger events on click AND Enter key -->
+<input id="filter-input" type="text" />  <!-- Will NOT trigger events (user can type freely) -->
 
 Please output ONLY the HTML code, without any markdown formatting or explanation."""
 
@@ -121,7 +122,7 @@ def create_interaction_prompt(element_id: str, form_data: Dict[str, str]) -> str
     if form_data:
         form_data_str = f"\n\nCurrent form field values:\n{json.dumps(form_data, indent=2)}"
 
-    return f"""The user has just clicked on the element with id "{element_id}".{form_data_str}
+    return f"""The user has just interacted with the element with id "{element_id}" (either by clicking it, or by pressing Enter if it's an input field).{form_data_str}
 
 Please process this interaction and decide whether the view needs to be updated.
 
@@ -132,9 +133,10 @@ If the view DOES need to change, generate an updated HTML view to represent the 
 
 Remember to:
 1. Assign unique IDs to interactive elements and mark them with data-interactive="true"
-2. Elements without data-interactive="true" will not trigger events (useful for input fields, etc.)
-3. Output ONLY the HTML code (or NO_CHANGE), without any markdown formatting or explanation
-4. Use standard HTML with inline CSS if needed"""
+2. Input fields and textareas with data-interactive="true" will trigger events on both click and Enter key
+3. Elements without data-interactive="true" will not trigger events (useful for input fields that don't need to trigger updates)
+4. Output ONLY the HTML code (or NO_CHANGE), without any markdown formatting or explanation
+5. Use standard HTML with inline CSS if needed"""
 
 
 @app.get("/")

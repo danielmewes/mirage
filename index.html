@@ -220,6 +220,16 @@
                     event.preventDefault();
                     handleElementClick(element.id);
                 });
+
+                // Add enter key listener for input fields
+                if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+                    element.addEventListener('keypress', (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            handleElementClick(element.id);
+                        }
+                    });
+                }
             });
         }
 
