@@ -147,6 +147,9 @@
                 if (data.type === 'html') {
                     renderHTML(data.content);
                     hideLoading();
+                } else if (data.type === 'no_change') {
+                    console.log('No view change needed');
+                    hideLoading();
                 }
             };
 

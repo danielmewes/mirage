@@ -113,11 +113,16 @@ def create_interaction_prompt(element_id: str, form_data: Dict[str, str]) -> str
 
     return f"""The user has just clicked on the element with id "{element_id}".{form_data_str}
 
-Please process this interaction, make any necessary updates to the application state, and generate an updated HTML view to represent the new state of the application to the user.
+Please process this interaction and decide whether the view needs to be updated.
+
+If the view does NOT need to change (for example, if this was an invalid action, or you're just processing something in the background without a visible change), simply respond with exactly:
+NO_CHANGE
+
+If the view DOES need to change, generate an updated HTML view to represent the new state of the application to the user.
 
 Remember to:
 1. Assign unique IDs to any interactive elements
-2. Output ONLY the HTML code, without any markdown formatting or explanation
+2. Output ONLY the HTML code (or NO_CHANGE), without any markdown formatting or explanation
 3. Use standard HTML with inline CSS if needed"""
 
 
@@ -176,11 +181,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 interaction_prompt = create_interaction_prompt(element_id, form_data)
                 html_response = get_llm_response(interaction_prompt)
 
-                # Send updated HTML back to client
-                await websocket.send_json({
-                    "type": "html",
-                    "content": html_response
-                })
+                # Check if the LLM indicated no change is needed
+                if html_response.strip() == "NO_CHANGE":
+                    print("LLM indicated no view change needed")
+                    # Send no-change message back to client
+                    await websocket.send_json({
+                        "type": "no_change"
+                    })
+                else:
+                    # Send updated HTML back to client
+                    await websocket.send_json({
+                        "type": "html",
+                        "content": html_response
+                    })
 
     except WebSocketDisconnect:
         print("Client disconnected")
