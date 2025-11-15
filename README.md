@@ -1,8 +1,10 @@
 # Mirage
 
-Use an LLM to hallucinate any web application you can imagine. The LLM generates HTML views on-the-fly based on user interactions.
+Use an LLM to hallucinate any web application you can imagine. Just type in a description of the app and interact with it right away!
 
-Currently uses Claude Haiku.
+The LLM generates HTML views on-the-fly based on your interactions.
+
+Currently uses Claude Haiku and requires an Anthropic API key to work.
 
 ## Setup
 
@@ -40,9 +42,10 @@ http://localhost:8000
 
 4. This cycle continues indefinitely, allowing you to interact with the simulated application as if it were a real app.
 
-## Notes
+## Notes & Limitations
 
-- The application uses Claude Haiku 4.5 for fast response times
-- Each interaction maintains context from previous interactions in the same session. Though you might eventually run out of available context window. 
-- The LLM is encouraged to assign IDs to interactive elements
+- This is very much just a proof of concept. Not meant for serious use.
+- Each interaction maintains context from previous interactions in the same session. Though you might eventually run out of available context window.
+- There isn't any persistent state across sessions
+- Not all UI interactions are supported. Mainly, button clicks and text input submissions will work, but things like drawing or dragging things will not.
 - Errors are logged to the terminal where the server is running
