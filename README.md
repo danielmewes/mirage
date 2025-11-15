@@ -1,6 +1,8 @@
 # Mirage
 
-An interactive web application that uses Claude AI to simulate any application you can imagine. The LLM generates HTML views on-the-fly based on user interactions.
+Use an LLM to hallucinate any web application you can imagine. The LLM generates HTML views on-the-fly based on user interactions.
+
+Currently uses Claude Haiku.
 
 ## Setup
 
@@ -38,16 +40,9 @@ http://localhost:8000
 
 4. This cycle continues indefinitely, allowing you to interact with the simulated application as if it were a real app.
 
-## Features
-
-- Real-time interaction using WebSockets
-- Full conversation history maintained with the LLM
-- Automatic form data capture on interactions
-- Simple, clean UI for the simulation
-
 ## Notes
 
 - The application uses Claude Haiku 4.5 for fast response times
-- Each interaction maintains context from previous interactions
+- Each interaction maintains context from previous interactions in the same session. Though you might eventually run out of available context window. 
 - The LLM is encouraged to assign IDs to interactive elements
 - Errors are logged to the terminal where the server is running
