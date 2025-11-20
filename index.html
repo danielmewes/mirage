@@ -112,7 +112,7 @@
             background: white;
             border-top: 2px solid #007bff;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            padding: 12px 20px;
+            padding: 10px 20px;
             z-index: 10000;
         }
 
@@ -123,6 +123,9 @@
         #modification-container {
             max-width: 1200px;
             margin: 0 auto;
+        }
+
+        #modification-input-row {
             display: flex;
             gap: 10px;
             align-items: center;
@@ -130,10 +133,10 @@
 
         #modification-input {
             flex: 1;
-            padding: 10px 15px;
+            padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 13px;
             box-sizing: border-box;
         }
 
@@ -143,12 +146,12 @@
         }
 
         #modification-submit {
-            padding: 10px 20px;
+            padding: 8px 16px;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
             white-space: nowrap;
         }
@@ -164,7 +167,146 @@
 
         /* Add padding to app container to prevent content from being hidden behind modification bar */
         #app-container.with-modification-bar {
-            padding-bottom: 70px;
+            padding-bottom: 100px;
+        }
+
+        /* Timeline slider styles (now inside modification bar) */
+        #timeline-section {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        #timeline-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        #timeline-track-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #fork-button {
+            padding: 5px 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        #fork-button:hover {
+            background-color: #218838;
+        }
+
+        #fork-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .timeline-track-container {
+            position: relative;
+            flex: 1;
+        }
+
+        #timeline-track {
+            position: relative;
+            height: 24px;
+            background: #e9ecef;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .timeline-marker:hover {
+            width: 12px;
+            height: 12px;
+            background: #0056b3;
+        }
+
+        .timeline-marker.current {
+            background: #28a745;
+            width: 10px;
+            height: 10px;
+        }
+
+        #timeline-slider-thumb {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: #007bff;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #timeline-slider-thumb:active {
+            cursor: grabbing;
+        }
+
+        #timeline-slider-thumb.viewing-past {
+            background: #ffc107;
+        }
+
+        /* Frozen mode overlay */
+        #frozen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 9998;
+            pointer-events: all;
+        }
+
+        #frozen-overlay.active {
+            display: block;
+        }
+
+        #frozen-indicator {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ffc107;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+        }
+
+        #frozen-indicator.active {
+            display: block;
         }
     </style>
 </head>
@@ -192,23 +334,55 @@
 
     <div id="modification-bar">
         <div id="modification-container">
-            <input
-                type="text"
-                id="modification-input"
-                placeholder="Enter a modification request (e.g., 'Change the colors to dark mode', 'Make buttons bigger')..."
-            />
-            <button id="modification-submit">Modify</button>
+            <!-- Timeline section -->
+            <div id="timeline-section">
+                <div id="timeline-label">Timeline</div>
+                <div id="timeline-track-wrapper">
+                    <div class="timeline-track-container">
+                        <div id="timeline-track">
+                            <div id="timeline-slider-thumb"></div>
+                        </div>
+                    </div>
+                    <button id="fork-button">
+                        <span>🔱</span>
+                        <span>Fork</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modification input row -->
+            <div id="modification-input-row">
+                <input
+                    type="text"
+                    id="modification-input"
+                    placeholder="Enter a modification request (e.g., 'Change the colors to dark mode', 'Make buttons bigger')..."
+                />
+                <button id="modification-submit">Modify</button>
+            </div>
         </div>
     </div>
+
+    <div id="frozen-overlay"></div>
+    <div id="frozen-indicator">VIEWING PAST STATE - READ ONLY</div>
 
     <script>
         let ws = null;
         let isInitialized = false;
+        let currentSessionId = null;
+        let stateCount = 0;
+        let currentStateIndex = 0;
+        let isFrozen = false;
+        let isDragging = false;
 
         // Connect to WebSocket
-        function connectWebSocket() {
+        function connectWebSocket(sessionId = null) {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            let wsUrl = `${protocol}//${window.location.host}/ws`;
+
+            // Add session ID to path if provided
+            if (sessionId) {
+                wsUrl += `/${sessionId}`;
+            }
 
             ws = new WebSocket(wsUrl);
 
@@ -222,9 +396,26 @@
                 if (data.type === 'html') {
                     renderHTML(data.content);
                     hideLoading();
+
+                    // Update session info
+                    if (data.sessionId) {
+                        currentSessionId = data.sessionId;
+                    }
+                    if (data.stateCount !== undefined) {
+                        stateCount = data.stateCount;
+                        currentStateIndex = stateCount - 1;
+                        updateTimeline();
+                    }
                 } else if (data.type === 'no_change') {
-                    console.log('No view change needed');
                     hideLoading();
+                } else if (data.type === 'historical_state') {
+                    renderHTML(data.content);
+                    currentStateIndex = data.stateIndex;
+                    setFrozenMode(!data.isCurrent);
+                    updateTimeline();
+                } else if (data.type === 'fork_created') {
+                    const newUrl = `${window.location.origin}/session/${data.newSessionId}`;
+                    window.open(newUrl, '_blank');
                 }
             };
 
@@ -266,13 +457,91 @@
             appContainer.style.display = 'block';
             appContainer.classList.add('with-modification-bar');
 
-            // Show modification bar once app is initialized
+            // Show modification bar (which now contains timeline) once app is initialized
             if (isInitialized) {
                 document.getElementById('modification-bar').classList.add('visible');
             }
 
-            // Attach click listeners to all elements with IDs
-            attachClickListeners();
+            // Attach click listeners to all elements with IDs (only if not frozen)
+            if (!isFrozen) {
+                attachClickListeners();
+            }
+        }
+
+        // Set frozen mode
+        function setFrozenMode(frozen) {
+            isFrozen = frozen;
+            const overlay = document.getElementById('frozen-overlay');
+            const indicator = document.getElementById('frozen-indicator');
+            const modInput = document.getElementById('modification-input');
+            const modSubmit = document.getElementById('modification-submit');
+            const thumb = document.getElementById('timeline-slider-thumb');
+
+            if (frozen) {
+                overlay.classList.add('active');
+                indicator.classList.add('active');
+                modInput.disabled = true;
+                modSubmit.disabled = true;
+                thumb.classList.add('viewing-past');
+            } else {
+                overlay.classList.remove('active');
+                indicator.classList.remove('active');
+                modInput.disabled = false;
+                modSubmit.disabled = false;
+                thumb.classList.remove('viewing-past');
+                // Re-attach listeners when unfrozen
+                attachClickListeners();
+            }
+        }
+
+        // Update timeline UI
+        function updateTimeline() {
+            if (stateCount === 0) return;
+
+            // Update slider thumb position
+            const track = document.getElementById('timeline-track');
+            const thumb = document.getElementById('timeline-slider-thumb');
+            const percentage = stateCount > 1 ? (currentStateIndex / (stateCount - 1)) * 100 : 50;
+            thumb.style.left = `${percentage}%`;
+
+            // Clear existing markers
+            const existingMarkers = track.querySelectorAll('.timeline-marker');
+            existingMarkers.forEach(marker => marker.remove());
+
+            // Add markers for each state
+            for (let i = 0; i < stateCount; i++) {
+                const marker = document.createElement('div');
+                marker.className = 'timeline-marker';
+                if (i === currentStateIndex) {
+                    marker.classList.add('current');
+                }
+                const markerPercentage = stateCount > 1 ? (i / (stateCount - 1)) * 100 : 50;
+                marker.style.left = `${markerPercentage}%`;
+                marker.dataset.stateIndex = i;
+                marker.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigateToState(i);
+                });
+                track.appendChild(marker);
+            }
+        }
+
+        // Navigate to a specific state
+        function navigateToState(stateIndex) {
+            if (stateIndex < 0 || stateIndex >= stateCount) return;
+
+            ws.send(JSON.stringify({
+                type: 'navigate_to_state',
+                stateIndex: stateIndex
+            }));
+        }
+
+        // Fork current session
+        function forkSession() {
+            ws.send(JSON.stringify({
+                type: 'fork_session',
+                stateIndex: currentStateIndex
+            }));
         }
 
         // Attach click listeners to elements marked as interactive
@@ -342,7 +611,7 @@
 
         // Handle element click
         function handleElementClick(elementId) {
-            if (!isInitialized) return;
+            if (!isInitialized || isFrozen) return;
 
             console.log('Element clicked:', elementId);
 
@@ -360,9 +629,54 @@
             }));
         }
 
+        // Initialize timeline slider dragging
+        function initTimelineSlider() {
+            const track = document.getElementById('timeline-track');
+            const thumb = document.getElementById('timeline-slider-thumb');
+
+            // Click on track to jump to position
+            track.addEventListener('click', (e) => {
+                if (stateCount <= 1) return;
+
+                const rect = track.getBoundingClientRect();
+                const percentage = (e.clientX - rect.left) / rect.width;
+                const targetState = Math.round(percentage * (stateCount - 1));
+                navigateToState(targetState);
+            });
+
+            // Drag thumb
+            thumb.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                isDragging = true;
+                thumb.style.cursor = 'grabbing';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging || stateCount <= 1) return;
+
+                const rect = track.getBoundingClientRect();
+                const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const targetState = Math.round(percentage * (stateCount - 1));
+
+                if (targetState !== currentStateIndex) {
+                    navigateToState(targetState);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    thumb.style.cursor = 'grab';
+                }
+            });
+
+            // Fork button
+            document.getElementById('fork-button').addEventListener('click', forkSession);
+        }
+
         // Handle modification request
         function handleModification() {
-            if (!isInitialized) return;
+            if (!isInitialized || isFrozen) return;
 
             const modificationInput = document.getElementById('modification-input');
             const modificationText = modificationInput.value.trim();
@@ -406,7 +720,20 @@
 
         // Initialize on page load
         window.addEventListener('load', () => {
-            connectWebSocket();
+            // Check if this is a forked session (URL like /session/{id})
+            const pathMatch = window.location.pathname.match(/\/session\/([^\/]+)/);
+            const forkedSessionId = pathMatch ? pathMatch[1] : null;
+
+            if (forkedSessionId) {
+                // This is a forked session - hide setup, connect to existing session
+                document.getElementById('setup-container').style.display = 'none';
+                showLoading(true);
+                connectWebSocket(forkedSessionId);
+                isInitialized = true;
+            } else {
+                // Normal initialization
+                connectWebSocket();
+            }
 
             // Set up start button
             document.getElementById('start-button').addEventListener('click', initializeApp);
@@ -426,6 +753,9 @@
                     handleModification();
                 }
             });
+
+            // Initialize timeline slider
+            initTimelineSlider();
         });
     </script>
 </body>

@@ -3,6 +3,7 @@ import json
 import re
 import uuid
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
 from contextlib import asynccontextmanager
@@ -41,6 +42,7 @@ class SessionState:
     def __init__(self):
         self.conversation_history: List[Dict[str, str]] = []
         self.application_description: str = ""
+        self.state_history: List[Dict] = []  # Track history of HTML states with metadata
 
 
 # Dictionary to store session states by session ID
@@ -202,6 +204,28 @@ Remember to:
 5. Use standard HTML with inline CSS if needed"""
 
 
+def add_state_to_history(session: SessionState, html_content: str, action_type: str, action_description: str):
+    """
+    Add a state snapshot to the session's history.
+
+    Args:
+        session: The session state object
+        html_content: The HTML content for this state
+        action_type: Type of action that created this state (init, interaction, modification)
+        action_description: Description of the action
+    """
+    state_entry = {
+        "html": html_content,
+        "timestamp": time.time(),
+        "action_type": action_type,
+        "action_description": action_description,
+        "conversation_length": len(session.conversation_history)
+    }
+
+    session.state_history.append(state_entry)
+    print(f"Added state to history. Total states: {len(session.state_history)}")
+
+
 @app.get("/")
 async def get():
     """
@@ -212,10 +236,49 @@ async def get():
     return HTMLResponse(content=html_content)
 
 
+@app.get("/session/{session_id}")
+async def get_session(session_id: str):
+    """
+    Serve the main HTML page with a specific session ID for forked sessions.
+    """
+    with open("index.html", "r") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint_with_session(websocket: WebSocket, session_id: str):
+    """
+    WebSocket endpoint for connecting to an existing session.
+    """
+    await websocket.accept()
+
+    # Check if session exists
+    if session_id in sessions:
+        session = sessions[session_id]
+        print(f"Connected to existing session: {session_id}")
+
+        # Send the current state to the newly connected client
+        if session.state_history:
+            current_state = session.state_history[-1]
+            await websocket.send_json({
+                "type": "html",
+                "content": current_state["html"],
+                "sessionId": session_id,
+                "stateCount": len(session.state_history)
+            })
+    else:
+        print(f"Session {session_id} not found, creating new session")
+        session = SessionState()
+        sessions[session_id] = session
+
+    await handle_websocket_messages(websocket, session_id, session)
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket endpoint for real-time communication with the frontend.
+    WebSocket endpoint for creating a new session.
     """
     await websocket.accept()
 
@@ -223,8 +286,15 @@ async def websocket_endpoint(websocket: WebSocket):
     session_id = str(uuid.uuid4())
     session = SessionState()
     sessions[session_id] = session
-
     print(f"New session created: {session_id}")
+
+    await handle_websocket_messages(websocket, session_id, session)
+
+
+async def handle_websocket_messages(websocket: WebSocket, session_id: str, session: SessionState):
+    """
+    Handle WebSocket messages for a session.
+    """
 
     try:
         while True:
@@ -243,10 +313,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 initial_prompt = create_initial_prompt(session.application_description)
                 html_response = await get_llm_response(session, initial_prompt)
 
-                # Send HTML back to client
+                # Add initial state to history
+                add_state_to_history(session, html_response, "init", "Initial application state")
+
+                # Send HTML back to client with session ID
                 await websocket.send_json({
                     "type": "html",
-                    "content": html_response
+                    "content": html_response,
+                    "sessionId": session_id,
+                    "stateCount": len(session.state_history)
                 })
 
             elif message_type == "interaction":
@@ -270,10 +345,14 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "no_change"
                     })
                 else:
+                    # Add state to history
+                    add_state_to_history(session, html_response, "interaction", f"Clicked element: {element_id}")
+
                     # Send updated HTML back to client
                     await websocket.send_json({
                         "type": "html",
-                        "content": html_response
+                        "content": html_response,
+                        "stateCount": len(session.state_history)
                     })
 
             elif message_type == "modification":
@@ -286,11 +365,77 @@ async def websocket_endpoint(websocket: WebSocket):
                 modification_prompt = create_modification_prompt(modification_request)
                 html_response = await get_llm_response(session, modification_prompt)
 
+                # Add state to history
+                add_state_to_history(session, html_response, "modification", f"Modified: {modification_request}")
+
                 # Send updated HTML back to client
                 await websocket.send_json({
                     "type": "html",
-                    "content": html_response
+                    "content": html_response,
+                    "stateCount": len(session.state_history)
                 })
+
+            elif message_type == "get_timeline":
+                # Send timeline data to client
+                timeline_data = [{
+                    "index": i,
+                    "action_type": state["action_type"],
+                    "action_description": state["action_description"],
+                    "timestamp": state["timestamp"]
+                } for i, state in enumerate(session.state_history)]
+
+                await websocket.send_json({
+                    "type": "timeline_data",
+                    "timeline": timeline_data
+                })
+
+            elif message_type == "navigate_to_state":
+                # Navigate to a specific state in history
+                state_index = data.get("stateIndex", -1)
+
+                if 0 <= state_index < len(session.state_history):
+                    state = session.state_history[state_index]
+                    await websocket.send_json({
+                        "type": "historical_state",
+                        "content": state["html"],
+                        "stateIndex": state_index,
+                        "isCurrent": state_index == len(session.state_history) - 1
+                    })
+                else:
+                    print(f"Invalid state index: {state_index}")
+
+            elif message_type == "fork_session":
+                # Create a new session by forking from a specific state
+                state_index = data.get("stateIndex", -1)
+
+                if 0 <= state_index < len(session.state_history):
+                    # Create new session
+                    new_session_id = str(uuid.uuid4())
+                    new_session = SessionState()
+
+                    # Copy application description
+                    new_session.application_description = session.application_description
+
+                    # Copy conversation history up to the state's conversation length
+                    conversation_cutoff = session.state_history[state_index]["conversation_length"]
+                    new_session.conversation_history = session.conversation_history[:conversation_cutoff].copy()
+
+                    # Copy state history up to and including the selected state
+                    new_session.state_history = session.state_history[:state_index + 1].copy()
+
+                    # Store new session
+                    sessions[new_session_id] = new_session
+
+                    print(f"Forked session {session_id} to new session {new_session_id} at state {state_index}")
+
+                    # Send back the new session ID
+                    await websocket.send_json({
+                        "type": "fork_created",
+                        "newSessionId": new_session_id,
+                        "stateIndex": state_index
+                    })
+                else:
+                    print(f"Invalid state index for fork: {state_index}")
 
     except WebSocketDisconnect:
         print(f"Session {session_id} - Client disconnected")
