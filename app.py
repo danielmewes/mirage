@@ -176,6 +176,32 @@ Remember to:
 5. Use standard HTML with inline CSS if needed"""
 
 
+def create_modification_prompt(modification_request: str) -> str:
+    """
+    Create a prompt for when the user requests a modification to the current view.
+    """
+    return f"""The user has requested a modification to the current application view:
+
+"{modification_request}"
+
+Please apply this modification to the current view and generate an updated HTML view that incorporates the requested changes.
+
+The modification might involve:
+- Changing colors, styles, or visual appearance
+- Adjusting layout or sizing
+- Modifying existing features or functionality
+- Any other visual or functional changes the user requested
+
+Generate the complete updated HTML view with the modifications applied. Maintain all existing functionality and state while applying the requested changes.
+
+Remember to:
+1. Assign unique IDs to interactive elements and mark them with data-interactive="true"
+2. Input fields and textareas with data-interactive="true" will trigger events on both click and Enter key
+3. Elements without data-interactive="true" will not trigger events (useful for input fields that don't need to trigger updates)
+4. Output ONLY the HTML code, without any markdown formatting or explanation
+5. Use standard HTML with inline CSS if needed"""
+
+
 @app.get("/")
 async def get():
     """
@@ -249,6 +275,22 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "html",
                         "content": html_response
                     })
+
+            elif message_type == "modification":
+                # Handle user modification request
+                modification_request = data.get("modification", "")
+
+                print(f"Session {session_id} - User requested modification: {modification_request}")
+
+                # Generate prompt for modification (runs in thread pool)
+                modification_prompt = create_modification_prompt(modification_request)
+                html_response = await get_llm_response(session, modification_prompt)
+
+                # Send updated HTML back to client
+                await websocket.send_json({
+                    "type": "html",
+                    "content": html_response
+                })
 
     except WebSocketDisconnect:
         print(f"Session {session_id} - Client disconnected")

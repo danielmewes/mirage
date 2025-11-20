@@ -102,6 +102,70 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        #modification-bar {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 2px solid #007bff;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            padding: 12px 20px;
+            z-index: 10000;
+        }
+
+        #modification-bar.visible {
+            display: block;
+        }
+
+        #modification-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #modification-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        #modification-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        #modification-submit {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        #modification-submit:hover {
+            background-color: #0056b3;
+        }
+
+        #modification-submit:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Add padding to app container to prevent content from being hidden behind modification bar */
+        #app-container.with-modification-bar {
+            padding-bottom: 70px;
+        }
     </style>
 </head>
 <body>
@@ -125,6 +189,17 @@
     </div>
 
     <div id="app-container"></div>
+
+    <div id="modification-bar">
+        <div id="modification-container">
+            <input
+                type="text"
+                id="modification-input"
+                placeholder="Enter a modification request (e.g., 'Change the colors to dark mode', 'Make buttons bigger')..."
+            />
+            <button id="modification-submit">Modify</button>
+        </div>
+    </div>
 
     <script>
         let ws = null;
@@ -189,6 +264,12 @@
             const appContainer = document.getElementById('app-container');
             appContainer.innerHTML = html;
             appContainer.style.display = 'block';
+            appContainer.classList.add('with-modification-bar');
+
+            // Show modification bar once app is initialized
+            if (isInitialized) {
+                document.getElementById('modification-bar').classList.add('visible');
+            }
 
             // Attach click listeners to all elements with IDs
             attachClickListeners();
@@ -279,6 +360,34 @@
             }));
         }
 
+        // Handle modification request
+        function handleModification() {
+            if (!isInitialized) return;
+
+            const modificationInput = document.getElementById('modification-input');
+            const modificationText = modificationInput.value.trim();
+
+            if (!modificationText) {
+                alert('Please enter a modification request');
+                return;
+            }
+
+            console.log('Modification requested:', modificationText);
+
+            // Clear input
+            modificationInput.value = '';
+
+            // Show loading
+            showLoading(false);
+            document.getElementById('loading-text').textContent = 'Applying modification...';
+
+            // Send modification message
+            ws.send(JSON.stringify({
+                type: 'modification',
+                modification: modificationText
+            }));
+        }
+
         // Show loading indicator
         function showLoading(isInitial = false) {
             const loadingText = document.getElementById('loading-text');
@@ -306,6 +415,15 @@
             document.getElementById('app-description').addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') {
                     initializeApp();
+                }
+            });
+
+            // Set up modification bar
+            document.getElementById('modification-submit').addEventListener('click', handleModification);
+
+            document.getElementById('modification-input').addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    handleModification();
                 }
             });
         });
