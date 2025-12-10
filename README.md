@@ -6,6 +6,8 @@ The LLM generates HTML views on-the-fly based on your interactions.
 
 Currently uses Claude Haiku and requires an Anthropic API key to work.
 
+See this [blog post for examples](https://amongai.com/2025/12/10/hallucinate-any-app-one-screen-at-a-time/).
+
 ## Setup
 
 1. Install dependencies:
